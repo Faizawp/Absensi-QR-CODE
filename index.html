@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Portal Kelas Coding & AI</title>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f4f8; margin: 0; padding: 20px; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    h2 { text-align: center; color: #2c3e50; }
+    
+    .tabs { display: flex; margin-bottom: 20px; }
+    .tab { flex: 1; padding: 10px; text-align: center; background: #e2e8f0; cursor: pointer; font-weight: bold; }
+    .tab.active { background: #3498db; color: white; }
+    .tab:first-child { border-radius: 8px 0 0 8px; }
+    .tab:last-child { border-radius: 0 8px 8px 0; }
+    
+    .section { display: none; }
+    .section.active { display: block; }
+    
+    #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 15px; }
+    #scanResult { text-align: center; font-weight: bold; padding: 10px; margin-top: 10px; border-radius: 5px; }
+    .success-msg { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    
+    label { display: block; margin-top: 10px; font-weight: bold; font-size: 14px; }
+    input { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; }
+    button { width: 100%; padding: 12px; background: #3498db; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 15px; }
+    button:hover { background: #2980b9; }
+    #btnStartScan { background: #27ae60; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h2>Portal Kelas Coding & AI</h2>
+    
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('absen')">Absensi (QR)</div>
+      <div class="tab" onclick="switchTab('tugas')">Input Tugas</div>
+    </div>
+
+    <!-- SEGMEN ABSENSI -->
+    <div id="sec-absen" class="section active">
+      <p style="text-align: center; font-size: 14px; color: #666;">Arahkan QR Code (berisi nama) ke kamera.</p>
+      
+      <button id="btnStartScan" onclick="startScanner()">Mulai Kamera Scanner</button>
+      <div id="reader"></div>
+      <div id="scanResult"></div>
+    </div>
+
+    <!-- SEGMEN TUGAS -->
+    <div id="sec-tugas" class="section">
+      <form id="formTugas" onsubmit="submitTugas(event)">
+        <label>Nama Siswa</label>
+        <input type="text" id="namaTugas" required placeholder="Nama lengkap">
+        
+        <label>Judul Modul / Tugas</label>
+        <input type="text" id="judulTugas" required placeholder="Contoh: Proyek Chatbot Dasar">
+        
+        <label>Nilai</label>
+        <input type="number" id="nilaiTugas" required min="0" max="100">
+        
+        <button type="submit" id="btnSubmitTugas">Simpan Data Tugas</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // MASUKKAN URL WEB APP GOOGLE APPS SCRIPT DI SINI
+    const SCRIPT_URL = 'URL_APPS_SCRIPT_ANDA_DISINI';
+
+    // Navigasi Tab
+    function switchTab(tab) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+      
+      if(tab === 'absen') {
+        document.querySelectorAll('.tab')[0].classList.add('active');
+        document.getElementById('sec-absen').classList.add('active');
+      } else {
+        document.querySelectorAll('.tab')[1].classList.add('active');
+        document.getElementById('sec-tugas').classList.add('active');
+        stopScanner();
+      }
+    }
+
+    // QR Scanner
+    let html5QrcodeScanner;
+    let isScanning = false;
+
+    function startScanner() {
+      if (isScanning) return;
+      const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+      html5QrcodeScanner = new Html5Qrcode("reader");
+      
+      html5QrcodeScanner.start(
+        { facingMode: "environment" }, 
+        config,
+        onScanSuccess
+      ).then(() => {
+        isScanning = true;
+        document.getElementById('btnStartScan').style.display = 'none';
+        document.getElementById('scanResult').innerHTML = "Kamera aktif. Silakan scan QR.";
+        document.getElementById('scanResult').className = "";
+      }).catch(err => {
+        alert("Gagal mengakses kamera. Pastikan memberikan izin kamera di browser.");
+      });
+    }
+
+    function stopScanner() {
+      if (html5QrcodeScanner && isScanning) {
+        html5QrcodeScanner.stop().then(() => {
+          isScanning = false;
+          document.getElementById('btnStartScan').style.display = 'block';
+        });
+      }
+    }
+
+    function onScanSuccess(decodedText) {
+      stopScanner();
+      const resDiv = document.getElementById('scanResult');
+      resDiv.innerHTML = "Memproses absensi untuk: " + decodedText + "...";
+      
+      // Siapkan data untuk dikirim ke API
+      const formData = new FormData();
+      formData.append('action', 'absen');
+      formData.append('nama', decodedText);
+
+      fetch(SCRIPT_URL, { method: 'POST', body: formData })
+        .then(response => response.json())
+        .then(data => {
+          resDiv.innerHTML = data.message;
+          resDiv.className = data.success ? "success-msg" : "";
+          setTimeout(startScanner, 3000); // Nyalakan lagi setelah 3 detik
+        })
+        .catch(error => {
+          resDiv.innerHTML = "Gagal menghubungi server.";
+          setTimeout(startScanner, 3000);
+        });
+    }
+
+    // Input Tugas
+    function submitTugas(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btnSubmitTugas');
+      btn.textContent = "Menyimpan...";
+      btn.disabled = true;
+
+      const formData = new FormData();
+      formData.append('action', 'tugas');
+      formData.append('nama', document.getElementById('namaTugas').value);
+      formData.append('judul', document.getElementById('judulTugas').value);
+      formData.append('nilai', document.getElementById('nilaiTugas').value);
+
+      fetch(SCRIPT_URL, { method: 'POST', body: formData })
+        .then(response => response.json())
+        .then(data => {
+          alert(data.message);
+          document.getElementById('formTugas').reset();
+          btn.textContent = "Simpan Data Tugas";
+          btn.disabled = false;
+        })
+        .catch(error => {
+          alert("Gagal menyimpan data.");
+          btn.textContent = "Simpan Data Tugas";
+          btn.disabled = false;
+        });
+    }
+  </script>
+</body>
+</html>
